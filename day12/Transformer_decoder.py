@@ -1,103 +1,76 @@
-{
-  "nbformat": 4,
-  "nbformat_minor": 0,
-  "metadata": {
-    "colab": {
-      "name": "Transformer_decoder.ipynb",
-      "provenance": [],
-      "authorship_tag": "ABX9TyMPwSC+H7eAhyQbBHx3KmC2"
-    },
-    "kernelspec": {
-      "name": "python3",
-      "display_name": "Python 3"
-    }
-  },
-  "cells": [
-    {
-      "cell_type": "code",
-      "metadata": {
-        "id": "h1uMJlXYmsEf"
-      },
-      "source": [
-        "import sys\n",
-        "import os\n",
-        "import time\n",
-        "import numpy as np\n",
-        "import gin\n",
-        "import trax\n",
-        "from trax import layers as tl\n",
-        "from trax.fastmath import numpy as jnp\n",
-        "import textwrap\n",
-        "\n",
-        "wrapper = textwrap.TextWrapper(width=70)\n",
-        "np.set_printoptions(threshold=sys.maxsize)\n",
-        "\n",
-        "# Embeddings\n",
-        "# Positional encoding\n",
-        "def Positional_encoder(vocab_size, d_model, dropout, max_len, mode):\n",
-        "    # A list of layers\n",
-        "    return [\n",
-        "            tl.Embedding(vocab_size, d_model), \n",
-        "            tl.Dropout(rate=dropout, mode=mode),\n",
-        "            tl.PositionalEncoding(max_len=max_len, mode=mode)\n",
-        "            ]\n",
-        "\n",
-        "\n",
-        "# Feed-Forward layer\n",
-        "def Feed_forward(d_model, d_feedforward, dropout, mode, feedforward_activation):\n",
-        "    # A list of layers;\n",
-        "    # maps an activation tensor to an activation tensor\n",
-        "    return [\n",
-        "            tl.LayerNorm(), \n",
-        "            tl.Dense(d_feedforward), \n",
-        "            feedforward_activation(),  # ReLU\n",
-        "            tl.Dropout(rate=dropout, mode=mode), \n",
-        "            tl.Dense(d_model), \n",
-        "            tl.Dropout(rate=dropout, mode=mode)\n",
-        "            ]\n",
-        "\n",
-        "\n",
-        "# Decoder block\n",
-        "def Decoder_block(d_model, d_feedforward, n_heads, dropout, mode, feedforward_activation):        \n",
-        "    # A list of two Residual blocks: the attention with normalization and dropout and feed-forward blocks\n",
-        "    return [\n",
-        "      tl.Residual(\n",
-        "          tl.LayerNorm(), \n",
-        "          tl.CausalAttention(d_model, n_heads=n_heads, dropout=dropout, mode=mode) \n",
-        "        ),\n",
-        "      tl.Residual(\n",
-        "          # the normalization layer is included\n",
-        "          FeedForward(d_model, d_feedforward, dropout, mode, feedforward_activation)\n",
-        "        ),\n",
-        "      ]\n",
-        "\n",
-        "\n",
-        "def Transformer_language_model(vocab_size=33300,\n",
-        "                  d_model=512,\n",
-        "                  d_ff=2048,\n",
-        "                  n_layers=6,\n",
-        "                  n_heads=8,\n",
-        "                  dropout=0.1,\n",
-        "                  max_len=4096,\n",
-        "                  mode='train',\n",
-        "                  ff_activation=tl.Relu):\n",
-        "    \n",
-        "    # Stack (list) of decoder blocks\n",
-        "    decoder_blocks = [DecoderBlock(d_model, d_ff, n_heads, dropout, mode, ff_activation) for _ in range(n_layers)] \n",
-        "\n",
-        "    # LM is a layer that maps from a tensor of tokens\n",
-        "    return tl.Serial(\n",
-        "        # Teacher forcing: we feed output of previous step to current step\n",
-        "        tl.ShiftRight(mode=mode), \n",
-        "        PositionalEncoder(vocab_size, d_model, dropout, max_len, mode),\n",
-        "        decoder_blocks, \n",
-        "        tl.LayerNorm(), \n",
-        "        tl.Dense(vocab_size), \n",
-        "        tl.LogSoftmax() \n",
-        "    )"
-      ],
-      "execution_count": null,
-      "outputs": []
-    }
-  ]
-}
+import sys
+import os
+import time
+import numpy as np
+import gin
+import trax
+from trax import layers as tl
+from trax.fastmath import numpy as jnp
+import textwrap
+
+wrapper = textwrap.TextWrapper(width=70)
+np.set_printoptions(threshold=sys.maxsize)
+
+# Embeddings
+# Positional encoding
+def Positional_encoder(vocab_size, d_model, dropout, max_len, mode):
+    # A list of layers
+    return [
+            tl.Embedding(vocab_size, d_model), 
+            tl.Dropout(rate=dropout, mode=mode),
+            tl.PositionalEncoding(max_len=max_len, mode=mode)
+            ]
+
+
+# Feed-Forward layer
+def Feed_forward(d_model, d_feedforward, dropout, mode, feedforward_activation):
+    # A list of layers;
+    # maps an activation tensor to an activation tensor
+    return [
+            tl.LayerNorm(), 
+            tl.Dense(d_feedforward), 
+            feedforward_activation(),  # ReLU
+            tl.Dropout(rate=dropout, mode=mode), 
+            tl.Dense(d_model), 
+            tl.Dropout(rate=dropout, mode=mode)
+            ]
+
+
+# Decoder block
+def Decoder_block(d_model, d_feedforward, n_heads, dropout, mode, feedforward_activation):        
+    # A list of two Residual blocks: the attention with normalization and dropout and feed-forward blocks
+    return [
+      tl.Residual(
+          tl.LayerNorm(), 
+          tl.CausalAttention(d_model, n_heads=n_heads, dropout=dropout, mode=mode) 
+        ),
+      tl.Residual(
+          # the normalization layer is included
+          FeedForward(d_model, d_feedforward, dropout, mode, feedforward_activation)
+        ),
+      ]
+
+
+def Transformer_language_model(vocab_size=33300,
+                  d_model=512,
+                  d_ff=2048,
+                  n_layers=6,
+                  n_heads=8,
+                  dropout=0.1,
+                  max_len=4096,
+                  mode='train',
+                  ff_activation=tl.Relu):
+    
+    # Stack (list) of decoder blocks
+    decoder_blocks = [DecoderBlock(d_model, d_ff, n_heads, dropout, mode, ff_activation) for _ in range(n_layers)] 
+
+    # LM is a layer that maps from a tensor of tokens
+    return tl.Serial(
+        # Teacher forcing: we feed output of previous step to current step
+        tl.ShiftRight(mode=mode), 
+        PositionalEncoder(vocab_size, d_model, dropout, max_len, mode),
+        decoder_blocks, 
+        tl.LayerNorm(), 
+        tl.Dense(vocab_size), 
+        tl.LogSoftmax() 
+    )
